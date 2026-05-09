@@ -12,6 +12,8 @@ import schedule
 import time
 import os
 
+# Import openpyxl styles for formatting the Excel file
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 # ----------------- 1. Browser Setup -----------------
 def setup_driver():
@@ -135,9 +137,53 @@ def run_daily_scraper():
     output_filename = f"Daily_Prices_{today_str}.xlsx"
 
     try:
-        df.to_excel(output_filename, index=False, engine="openpyxl")
-        print(f"Report saved: {output_filename}")
+        # Use pandas ExcelWriter to format the output using openpyxl
+        with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Prices")
+            workbook = writer.book
+            worksheet = writer.sheets["Prices"]
+
+            # Define styling properties
+            header_font = Font(bold=True, color="FFFFFF")
+            # Blue background for headers
+            header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+            center_alignment = Alignment(horizontal="center", vertical="center")
+            thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                                 top=Side(style='thin'), bottom=Side(style='thin'))
+
+            # Apply styling to header row
+            for col_num, value in enumerate(df.columns.values):
+                cell = worksheet.cell(row=1, column=col_num + 1)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = center_alignment
+                cell.border = thin_border
+
+            # Auto-adjust column width and style all data cells
+            for col in worksheet.columns:
+                max_length = 0
+                column_letter = col[0].column_letter # Get the column letter (e.g., 'A', 'B')
+                
+                for cell in col:
+                    # Apply borders and alignment to every cell
+                    if cell.row != 1: # Header is already styled
+                        cell.border = thin_border
+                        cell.alignment = center_alignment
+                    
+                    # Calculate max length for auto-fitting
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                
+                # Add a little padding to the width
+                adjusted_width = (max_length + 4)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+
+        print(f"Report saved and formatted successfully: {output_filename}")
         send_email_with_report(output_filename)
+        
     except Exception as e:
         print(f"Error saving Excel file: {e}")
 
@@ -150,7 +196,7 @@ if __name__ == "__main__":
     schedule.every().day.at("08:00").do(run_daily_scraper)
 
     # Uncomment the line below to run immediately for testing purposes
-    run_daily_scraper()
+    # run_daily_scraper()
 
     # Continuous loop to check the schedule
     while True:
